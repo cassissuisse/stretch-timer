@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stretch Timer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #f0f0f0;
+        }
+        #app {
+            width: 90%;
+            max-width: 700px;
+            text-align: center;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #timer {
+            font-size: 48px;
+            margin: 20px 0;
+        }
+        .stretch {
+            font-size: 24px;
+            margin: 10px 0;
+        }
+        .next-stretch {
+            font-size: 18px;
+            color: gray;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 18px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #ddd;
+        }
+        #progressBarContainer {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        #progressBar {
+            height: 20px;
+            background-color: #4CAF50;
+            width: 0%;
+        }
+        #calendar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+        .calendar-day {
+            flex-basis: calc(100% / 7 - 10px);
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #fff;
+            transition: background 0.3s;
+        }
+        .calendar-day.stretched {
+            background-color: #4CAF50;
+            color: white;
+        }
+        @media (max-width: 600px) {
+            .calendar-day {
+                flex-basis: calc(100% / 7 - 6px);
+                padding: 8px;
+                margin: 4px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h1>Stretch Timer</h1>
+        <div id="stretchName" class="stretch"></div>
+        <div id="timer">00:00</div>
+        <div id="nextStretch" class="next-stretch"></div>
+        <div>
+            <button onclick="startStretching()">Start Stretching</button>
+            <button onclick="skipStretch()">Skip</button>
+            <button id="pauseButton" onclick="pauseOrResume()">Pause</button>
+        </div>
+        <div id="progressBarContainer">
+            <div id="progressBar"></div>
+        </div>
+        <div id="calendar"></div>
+    </div>
+
+    <script>
+        const stretches = [
+            { name: 'Squat Part 1', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Squat Part 2', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Sit on knees Part 1', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Sit on knees Part 2', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Achilles heel stretch Part 1', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Achilles heel stretch Part 2', duration: 30 },
+            { name: 'Weighted Hamstring stretch Part 1', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Weighted Hamstring stretch Part 2', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Butterfly Part 1', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Butterfly Part 2', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Weighted Lunge Left Part 1', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Weighted Lunge Left Part 2', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Weighted Lunge Right Part 1', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Weighted Lunge Right Part 2', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Pancake stretch Part 1', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Pancake stretch Part 2', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Front Split Part 1', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Front Split Part 2', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Side Split Left Part 1', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Side Split Left Part 2', duration: 30 },
+            { name: 'Side Split Right Part 1', duration: 30 },
+            { name: 'Rest', duration: 10 },
+            { name: 'Side Split Right Part 2', duration: 30 },
+        ];
+
+        let i = 0;
+        let timer = 0;
+        let interval;
+        let isPaused = false;
+        let wakeLock = null;
+        const totalStretchTime = stretches.reduce((acc, stretch) => acc + stretch.duration, 0);
+
+        async function requestWakeLock() {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => {
+                        console.log('Wake Lock was released');
+                    });
+                    console.log('Wake Lock is active');
+                } catch (err) {
+                    console.error(`${err.name}, ${err.message}`);
+                }
+            } else {
+                console.log('Wake Lock API not supported');
+            }
+        }
+
+        function startStretching() {
+            requestWakeLock();
+            if (i < stretches.length) {
+                const currentStretch = stretches[i];
+                const nextStretch = stretches[i + 1];
+
+                document.getElementById('stretchName').innerText = currentStretch.name;
+                timer = currentStretch.duration;
+
+                if (nextStretch && currentStretch.name === 'Rest') {
+                    document.getElementById('nextStretch').innerText = `Next: ${nextStretch.name}`;
+                } else {
+                    document.getElementById('nextStretch').innerText = '';
+                }
+
+                playAudio(currentStretch.name);
+                updateTimer();
+                interval = setInterval(updateTimer, 1000);
+            } else {
+                markDayInCalendar();
+            }
+        }
+
+        function updateTimer() {
+            if (!isPaused) {
+                if (timer > 0) {
+                    document.getElementById('timer').innerText = `00:${timer < 10 ? '0' + timer : timer}`;
+                    if (timer <= 3) {
+                        playBeep();
+                    }
+                    timer--;
+                } else {
+                    clearInterval(interval);
+                    i++;
+                    updateProgressBar();
+                    startStretching();
+                }
+            }
+        }
+
+        function skipStretch() {
+            clearInterval(interval);
+            i++;
+            updateProgressBar();
+            startStretching();
+        }
+
+        function pauseOrResume() {
+            if (isPaused) {
+                isPaused = false;
+                document.getElementById('pauseButton').innerText = 'Pause';
+                interval = setInterval(updateTimer, 1000);
+            } else {
+                isPaused = true;
+                clearInterval(interval);
+                document.getElementById('pauseButton').innerText = 'Resume';
+            }
+        }
+
+        function updateProgressBar() {
+            const currentStretchTime = stretches.slice(0, i).reduce((acc, stretch) => acc + stretch.duration, 0);
+            const progressPercentage = (currentStretchTime / totalStretchTime) * 100;
+            document.getElementById('progressBar').style.width = progressPercentage + '%';
+        }
+
+        function playAudio(stretchName) {
+            const audio = new Audio();
+            audio.src = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(stretchName)}`;
+            audio.play();
+        }
+
+        function playBeep() {
+            const beep = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAABCxAgAEABAAZGF0YQoAAABgY2NkZWRlYmVkgICAgICAgIGBgYGBgYGBgZGRkZGRkZGhoaGhoaGhnZ2dnZ2dnZmZmZmZmZmpqampqamtra2trcHBwcHBwcHR0dHR0dHV1dXV1dXZ2dnZ2dnZ3d3d3d3d4eHh4eHh4ePj4+Pj4+Pj5+fn5+foKCgoKCgoKDAwMDAwMDAwQEBAQEBAQEBEREREREREBISGhISEhISEiYqJiYmJiYmJjQ2NjY2NjY2ODg4Ojo6Ojo6Ojo6Pj4+Pj4+Pj4+Pjw8PDw8PDw8Pj4+Pj4+Pj4+Ojo6Ojo6Ojo6ODg4NjY2NjY2NjYmJiYmJiYmJhISEhISEhISERERERERERAwMDAwMDAwKCgoKCgoKBgYGBgYGBgZGRkZGRkZGRmZmZmZmZmcnJycXBwcHBwcHR0dHR0dHZ2dnZ2dnZ2hoaGhoaGhkZGRkZGZmZmZmZmZmZmhoaGhoaGhnZ2dnZ2dnZ3d3d3d3e3t7e3t7fHx8fHx8fPz8/Pz8/b29vb29vLy8vLy8trOzsrS0tra2tba2tra3u7e3u7u7vLy8vLy8wn5+fn5+fr6+vr6+vrq6urpT0tuTk5OXm5yYldQ==');
+            beep.play();
+        }
+
+        function markDayInCalendar() {
+            const today = new Date().toISOString().split('T')[0];
+            let stretchedDays = JSON.parse(localStorage.getItem('stretchedDays')) || [];
+            if (!stretchedDays.includes(today)) {
+                stretchedDays.push(today);
+            }
+            localStorage.setItem('stretchedDays', JSON.stringify(stretchedDays));
+            renderCalendar();
+        }
+
+        function renderCalendar() {
+            const calendar = document.getElementById('calendar');
+            calendar.innerHTML = '';
+
+            const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+            const lastDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+            let day = firstDayOfMonth;
+
+            let stretchedDays = JSON.parse(localStorage.getItem('stretchedDays')) || [];
+
+            while (day <= lastDayOfMonth) {
+                const dayDiv = document.createElement('div');
+                dayDiv.classList.add('calendar-day');
+
+                if (stretchedDays.includes(day.toISOString().split('T')[0])) {
+                    dayDiv.classList.add('stretched');
+                }
+
+                dayDiv.innerText = day.getDate();
+                calendar.appendChild(dayDiv);
+
+                day.setDate(day.getDate() + 1);
+            }
+        }
+
+        window.onload = renderCalendar;
+    </script>
+</body>
+</html>
